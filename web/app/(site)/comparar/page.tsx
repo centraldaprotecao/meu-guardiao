@@ -94,6 +94,11 @@ export default function Comparar() {
                     <span className="text-lg font-semibold text-muted">/mês</span>
                   </div>
                   <AvisoPreco className="mt-1" />
+                  {o.origem === "API" && o.preco_anual_vista && (
+                    <p className="mt-1 text-[14px] text-body">
+                      ou <b>R$ {o.preco_anual_vista.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/ano</b> à vista ({o.desconto_anual_pct}% de desconto)
+                    </p>
+                  )}
                   {RECURSOS.aderencia && (
                     <>
                       <div className="mt-2 text-[15px]"><b className="text-teal">{pct(o.aderencia_total)}</b> de aderência</div>
@@ -107,9 +112,13 @@ export default function Comparar() {
                     </p>
                   )}
                   <div className="mt-5 grid grid-cols-[1fr_auto] gap-3 items-center">
-                    <button type="button" className="btn btn-primary" onClick={() => escolher(o.produto_versao_id)}>
-                      Escolher <ArrowRight size={16} aria-hidden />
-                    </button>
+                    {o.origem === "API" ? (
+                      <p className="text-[13px] text-muted">Preço estimado, consultado agora na seguradora. Pode mudar após o questionário de avaliação de risco. A contratação desta opção ainda não é feita por aqui.</p>
+                    ) : (
+                      <button type="button" className="btn btn-primary" onClick={() => escolher(o.produto_versao_id)}>
+                        Escolher <ArrowRight size={16} aria-hidden />
+                      </button>
+                    )}
                     <Link href={`/opcao/${o.produto_versao_id}`} className="font-semibold text-action hover:underline px-1">Detalhes</Link>
                   </div>
                   <label className="mt-4 flex items-center gap-2 text-[14px] text-body cursor-pointer w-fit">

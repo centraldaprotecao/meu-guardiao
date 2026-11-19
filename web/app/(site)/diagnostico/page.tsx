@@ -185,7 +185,7 @@ export default function Diagnostico() {
     try {
       const mapa = await api<Mapa>("/v1/diagnostico", { corpo });
       gravarFluxo({
-        perfil: { idade, sexo: r.sexo!, fumante: r.fumante! },
+        perfil: { idade, sexo: r.sexo!, fumante: r.fumante!, renda: r.renda },
         necessidadeId: mapa.necessidade_id,
         capitais: undefined,
         comparacao: undefined,

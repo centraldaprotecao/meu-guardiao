@@ -20,7 +20,7 @@ INF = float("inf")
 @dataclass
 class ProdutoCarregado:
     produto_versao_id: str
-    tarifa_versao_id: str
+    tarifa_versao_id: Optional[str]
     condicoes_gerais_versao_id: Optional[str]
     produto: Produto
     exibivel: bool  # PUBLICADO + tarifa da seguradora

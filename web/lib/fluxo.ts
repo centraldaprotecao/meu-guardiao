@@ -5,7 +5,16 @@ import type { Comparacao } from "./api";
 
 // Estado da jornada do cliente. Vive no sessionStorage: sobrevive a recarregar
 // a página, some ao fechar a aba. Nada sensível é guardado aqui (sem CPF).
-export type Perfil = { idade: number; sexo: "M" | "F"; fumante: boolean };
+export type Perfil = {
+  idade: number;
+  sexo: "M" | "F";
+  fumante: boolean;
+  /** Pedidos pelas seguradoras com preço ao vivo (Azos). Opcionais: só aparecem se alguma estiver ligada. */
+  renda?: number;
+  pesoKg?: number;
+  alturaCm?: number;
+  profissao?: string;
+};
 
 export type Fluxo = {
   perfil?: Perfil;

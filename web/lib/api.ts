@@ -33,6 +33,11 @@ export type ItemOpcao = {
 
 export type Opcao = {
   produto_versao_id: string;
+  /** API = preço consultado agora na seguradora (ainda sem contratação por aqui). */
+  origem?: "API" | "TABELA";
+  /** Só em opções da API: total anual à vista com o desconto da seguradora. */
+  preco_anual_vista?: number;
+  desconto_anual_pct?: number;
   produto: { seguradora: string; nome: string; fonte_tarifa: string };
   exibivel_ao_consumidor: boolean;
   premio_mensal: number;

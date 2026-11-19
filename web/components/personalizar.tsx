@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { Opcoes, Texto } from "@/components/campos";
+import { Dinheiro, Opcoes, Selecao, Texto } from "@/components/campos";
 import { Aviso, Carregando, Etapas, IconeNec, NEC, ORDEM_NEC } from "@/components/ui";
 import { abrirEspecialista } from "@/components/especialista";
 import { api, ErroApi, type Comparacao, type Mapa } from "@/lib/api";
@@ -39,12 +39,27 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
   const [simulando, setSimulando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [recado, setRecado] = useState("");
+  // Dados que a Azos exige para dar preço. A lista de profissões vem da própria API: vazia = Azos
+  // desligada, e então o bloco inteiro some (ninguém responde pergunta que não vai usar).
+  const [profissoes, setProfissoes] = useState<string[]>([]);
+  const [dados, setDados] = useState<{ peso: string; altura: string; profissao: string; renda: number }>({
+    peso: "", altura: "", profissao: "", renda: 0,
+  });
+  const [rendaConhecida, setRendaConhecida] = useState(false);
   const seq = useRef(0);
 
   // Carrega diagnóstico (jornada A) e perfil salvo; define valores iniciais.
   useEffect(() => {
     const f = lerFluxo();
-    if (f.perfil) setPerfil({ idade: String(f.perfil.idade), sexo: f.perfil.sexo, fumante: f.perfil.fumante });
+    if (f.perfil) {
+      setPerfil({ idade: String(f.perfil.idade), sexo: f.perfil.sexo, fumante: f.perfil.fumante });
+      setDados({
+        peso: f.perfil.pesoKg ? String(f.perfil.pesoKg) : "", altura: f.perfil.alturaCm ? String(f.perfil.alturaCm) : "",
+        profissao: f.perfil.profissao ?? "", renda: f.perfil.renda ?? 0,
+      });
+      setRendaConhecida((f.perfil.renda ?? 0) > 0);
+    }
+    api<{ profissoes: string[] }>("/v1/profissoes").then((r) => setProfissoes(r.profissoes)).catch(() => {});
     if (f.recado) setRecado(f.recado);
     // Valores guardados só valem para a mesma jornada: os de um diagnóstico não vazam para "Montar".
     const salvos = necessidadeId || !f.necessidadeId ? f.capitais : undefined;
@@ -79,6 +94,10 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
     return c;
   }, [valores, ativos]);
   const algum = Object.values(escolhidos).some((v) => v > 0);
+  const pedeDados = profissoes.length > 0;
+  const pesoNum = Number(dados.peso);
+  const alturaNum = Number(dados.altura);
+  const dadosOk = !pedeDados || (pesoNum >= 20 && pesoNum <= 400 && alturaNum >= 100 && alturaNum <= 250 && !!dados.profissao && dados.renda > 0);
 
   // Simulação ao vivo: recalcula (sem gravar) ~0,4 s depois do último ajuste.
   useEffect(() => {
@@ -120,6 +139,11 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
       fumante: perfil.fumante,
       capitais_escolhidos: escolhidos,
       persistir,
+      // Só vai quando o campo está completo: digitar "7" a caminho de "78" não pode virar erro.
+      peso_kg: pedeDados && pesoNum >= 20 && pesoNum <= 400 ? pesoNum : undefined,
+      altura_cm: pedeDados && alturaNum >= 100 && alturaNum <= 250 ? alturaNum : undefined,
+      renda_mensal: pedeDados && dados.renda > 0 ? dados.renda : undefined,
+      profissao: pedeDados && dados.profissao ? dados.profissao : undefined,
       recado: persistir && recado.trim() ? recado.trim() : undefined,
     };
   }
@@ -129,7 +153,10 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
     setErro(null);
     try {
       const r = await api<Comparacao>("/v1/comparar", { corpo: corpo(true) });
-      const p: Perfil = { idade: idadeNum, sexo: perfil.sexo!, fumante: perfil.fumante! };
+      const p: Perfil = {
+        idade: idadeNum, sexo: perfil.sexo!, fumante: perfil.fumante!,
+        ...(pedeDados ? { renda: dados.renda, pesoKg: pesoNum, alturaCm: alturaNum, profissao: dados.profissao } : {}),
+      };
       gravarFluxo({
         perfil: p, necessidadeId, capitais: escolhidos, comparacao: r, escolhida: undefined, selecionadas: [],
         recado: recado.trim() || undefined,
@@ -181,6 +208,20 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
                   <Texto rotulo="Idade" valor={perfil.idade} inputMode="numeric" maxLength={2} placeholder="Ex.: 38" onChange={(v) => setPerfil((p) => ({ ...p, idade: v.replace(/\D/g, "") }))} />
                   <Opcoes compacto rotulo="Sexo" valor={perfil.sexo} onChange={(v) => setPerfil((p) => ({ ...p, sexo: v }))} opcoes={[{ valor: "F" as const, texto: "Feminino" }, { valor: "M" as const, texto: "Masculino" }]} />
                   <Opcoes compacto rotulo="Fuma?" valor={perfil.fumante} onChange={(v) => setPerfil((p) => ({ ...p, fumante: v }))} opcoes={[{ valor: false, texto: "Não" }, { valor: true, texto: "Sim" }]} />
+                </div>
+              </section>
+            ) : null}
+
+            {pedeDados ? (
+              <section className="card p-5 mt-6" aria-label="Dados para o preço">
+                <h2 className="font-extrabold text-ink mb-3">Mais alguns dados <span className="text-muted font-medium text-sm">(algumas seguradoras só dão o preço com eles)</span></h2>
+                <div className="grid sm:grid-cols-2 gap-4 items-end">
+                  <Texto rotulo="Peso (kg)" valor={dados.peso} inputMode="numeric" maxLength={3} placeholder="Ex.: 78" onChange={(v) => setDados((d) => ({ ...d, peso: v.replace(/\D/g, "") }))} />
+                  <Texto rotulo="Altura (cm)" valor={dados.altura} inputMode="numeric" maxLength={3} placeholder="Ex.: 175" onChange={(v) => setDados((d) => ({ ...d, altura: v.replace(/\D/g, "") }))} />
+                  <Selecao rotulo="Profissão" valor={dados.profissao} opcoes={profissoes} onChange={(v) => setDados((d) => ({ ...d, profissao: v }))} />
+                  {!rendaConhecida ? (
+                    <Dinheiro rotulo="Renda mensal" valor={dados.renda} onChange={(v) => setDados((d) => ({ ...d, renda: v }))} />
+                  ) : null}
                 </div>
               </section>
             ) : null}
@@ -314,7 +355,7 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
               </div>
             )}
             {erro && <div className="mt-4"><Aviso tom="erro">{erro}</Aviso></div>}
-            <button type="button" onClick={comparar} disabled={!maisBarata || enviando || simulando} className="btn btn-primary w-full mt-6">
+            <button type="button" onClick={comparar} disabled={!maisBarata || !dadosOk || enviando || simulando} className="btn btn-primary w-full mt-6">
               {enviando ? "Comparando…" : "Comparar opções"} {!enviando && <ArrowRight size={18} aria-hidden />}
             </button>
             {necessidadeId && (
@@ -338,7 +379,7 @@ export function Personalizar({ necessidadeId }: { necessidadeId?: string }) {
             <div className="text-[13px] text-muted">{simulando ? "Calculando…" : "Preencha seu perfil"}</div>
           )}
         </div>
-        <button type="button" onClick={comparar} disabled={!maisBarata || enviando || simulando} className="btn btn-primary !py-3 !px-5 whitespace-nowrap">
+        <button type="button" onClick={comparar} disabled={!maisBarata || !dadosOk || enviando || simulando} className="btn btn-primary !py-3 !px-5 whitespace-nowrap">
           {enviando ? "Comparando…" : "Comparar"} <ArrowRight size={16} aria-hidden />
         </button>
       </div>

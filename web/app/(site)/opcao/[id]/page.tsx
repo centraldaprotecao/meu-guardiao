@@ -155,9 +155,13 @@ export default function Detalhes() {
               <span className="font-bold text-ink">Valor mensal</span>
               <span className="text-3xl font-extrabold text-teal">R$ {Math.round(o.premio_mensal).toLocaleString("pt-BR")}<span className="text-base">/mês</span></span>
             </div>
-            <button type="button" className="btn btn-primary w-full mt-5" onClick={() => { atualizar({ escolhida: id }); router.push("/contratar"); }}>
-              Escolher esta opção <ArrowRight size={18} aria-hidden />
-            </button>
+            {o.origem === "API" ? (
+              <p className="text-[13px] text-muted mt-5">Preço estimado, consultado agora na seguradora. Pode mudar após o questionário de avaliação de risco. A contratação desta opção ainda não é feita por aqui.</p>
+            ) : (
+              <button type="button" className="btn btn-primary w-full mt-5" onClick={() => { atualizar({ escolhida: id }); router.push("/contratar"); }}>
+                Escolher esta opção <ArrowRight size={18} aria-hidden />
+              </button>
+            )}
             <Link href="/comparar" className="btn btn-secondary w-full mt-3">Comparar novamente</Link>
           </aside>
         </div>

@@ -20,6 +20,7 @@ serve à demonstração, mas precisa de login antes de dados reais de clientes.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import replace
 import uuid
@@ -36,6 +37,11 @@ from motor_dor import (
 from motor_dor.comparador import PARAMETROS_COMPARADOR, comparar, recomendados
 from motor_dor.projecao import HORIZONTES_ANOS, precisa_projecao, projetar_premio
 
+from conectores import (
+    CoberturaSolicitada, PerfilCotacao, cotar_em_conectores, montar_produto,
+)
+from conectores.azos import ConectorAzos
+
 from . import repositorio as repo
 from .infra import conexao as _conexao, permitir_ficticios as _permitir_ficticios
 
@@ -50,6 +56,13 @@ CODIGOS_NECESSIDADE = {
     "NEC_FRATURA": ("Fraturas", "CAPITAL"),
 }
 ESCOLHA_DIRETA = ("NEC_CIRURGIA", "NEC_FRATURA")
+# Necessidade -> cobertura interna pedida às APIs das seguradoras.
+DESCONTO_ANUAL_AO_VIVO_PCT = 5  # Azos: 5% só no pagamento anual à vista
+COBERTURA_PEDIDA = {
+    "NEC_MORTE": "MORTE_QC", "NEC_INVALIDEZ": "IPTA", "NEC_DOENCA_GRAVE": "DG",
+    "NEC_RENDA": "DIH", "NEC_CIRURGIA": "CIRURGIA", "NEC_FRATURA": "FRATURA_RUPTURA",
+}
+log = logging.getLogger("meu_guardiao")
 
 app = FastAPI(title="Meu Guardião", version="0.1.0")
 
@@ -131,6 +144,12 @@ class CompararIn(_Estrito):
     persistir: bool = True
     # Recado livre do cliente para o especialista (tela de personalização).
     recado: Optional[str] = Field(None, max_length=1000)
+    # Dados que as seguradoras com cotação por API (Azos) exigem para precificar.
+    # Sem eles a comparação segue só com as tabelas; nada quebra.
+    peso_kg: Optional[float] = Field(None, ge=20, le=400)
+    altura_cm: Optional[int] = Field(None, ge=100, le=250)
+    renda_mensal: Optional[float] = Field(None, ge=0)
+    profissao: Optional[str] = Field(None, max_length=80)
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +233,35 @@ def _com_escolha_direta(mapa: MapaDeProtecao, escolhidos: Optional[Dict[str, flo
     return replace(mapa, necessidades=list(mapa.necessidades) + extras) if extras else mapa
 
 
+@app.get("/v1/profissoes")
+def profissoes():
+    """Profissões aceitas pelas seguradoras com cotação por API. Vazio = o campo não aparece."""
+    azos = ConectorAzos()
+    return {"profissoes": azos.listar_profissoes() if azos.configurado() else []}
+
+
+def _produtos_de_api(req: "CompararIn", mapa: MapaDeProtecao, escolhidos) -> List[repo.ProdutoCarregado]:
+    """Cotação ao vivo nas seguradoras com API. Qualquer falha vira log, nunca erro ao cliente."""
+    solicitadas = []
+    for n in mapa.necessidades:
+        cod = COBERTURA_PEDIDA.get(n.codigo)
+        capital = (escolhidos or {}).get(n.codigo, n.gap)
+        if cod and capital > 0:
+            solicitadas.append(CoberturaSolicitada(cod, capital))
+    perfil = PerfilCotacao(
+        idade=req.idade, sexo=req.sexo, fumante=req.fumante, profissao=req.profissao,
+        peso_kg=req.peso_kg, altura_cm=req.altura_cm, renda_mensal=req.renda_mensal)
+    r = cotar_em_conectores(perfil, solicitadas)
+    for a in r.avisos:
+        log.warning("conector: %s", a)
+    return [
+        repo.ProdutoCarregado(
+            produto_versao_id="api-" + p.seguradora.lower(), tarifa_versao_id=None,
+            condicoes_gerais_versao_id=None, produto=p, exibivel=True)
+        for p in r.produtos
+    ]
+
+
 @app.post("/v1/comparar")
 def comparar_endpoint(req: CompararIn):
     escolhidos = req.capitais_escolhidos
@@ -253,6 +301,10 @@ def comparar_endpoint(req: CompararIn):
 
         dev = _permitir_ficticios()
         carregados = repo.carregar_produtos(conn, dev)
+        # Preço ao vivo só na comparação final: o simulador dos sliders chama esta rota a cada
+        # ajuste e não deve consumir a cota das seguradoras.
+        if req.persistir:
+            carregados = carregados + _produtos_de_api(req, mapa, escolhidos)
         por_produto = {id(c.produto): c for c in carregados}
         cotacoes = comparar(
             [c.produto for c in carregados], mapa, req.idade, req.sexo, req.fumante,
@@ -278,7 +330,9 @@ def comparar_endpoint(req: CompararIn):
                     })
                     continue
                 projecao = {a: round(v, 2) for a, v in projecao.items()}
+            ao_vivo = pc.tarifa_versao_id is None
             opcao = {
+                "origem": "API" if ao_vivo else "TABELA",
                 "produto_versao_id": pc.produto_versao_id,
                 "produto": {"seguradora": cot.produto.seguradora, "nome": cot.produto.nome,
                             "fonte_tarifa": cot.produto.fonte_tarifa},
@@ -299,8 +353,16 @@ def comparar_endpoint(req: CompararIn):
                     "ano_10": projecao[10], "ano_20": projecao[20], "ano_30": projecao[30],
                     "premissa": "Capital constante e tabela de tarifa de hoje, lida na sua idade futura.",
                 },
-                "alertas": cot.alertas,
+                "alertas": cot.alertas + (
+                    [f"Preço consultado agora na {cot.produto.seguradora}. A evolução do preço com a "
+                     "idade não foi informada por ela.",
+                     "Preço estimado: pode mudar após o questionário de avaliação de risco da seguradora."]
+                    if ao_vivo else []),
             }
+            if ao_vivo:  # desconto da Azos só no anual à vista (confirmado no simulador oficial)
+                opcao["desconto_anual_pct"] = DESCONTO_ANUAL_AO_VIVO_PCT
+                opcao["preco_anual_vista"] = round(
+                    cot.premio_mensal_total * 12 * (1 - DESCONTO_ANUAL_AO_VIVO_PCT / 100), 2)
             opcoes.append(opcao)
             gravar.append({"cotacao": cot, "carregado": pc, "projecao": projecao,
                            "detalhe": {"itens": opcao["itens"], "alertas": cot.alertas}})
@@ -311,7 +373,8 @@ def comparar_endpoint(req: CompararIn):
                 conn, cliente_id=cliente_id, necessidade_id=req.necessidade_id,
                 motor_versao=motor_versao, comparador_versao=PARAMETROS_COMPARADOR.versao,
                 idade=req.idade, sexo=req.sexo, fumante=req.fumante,
-                capitais_escolhidos=escolhidos, modo_dev=dev, itens=gravar, recado=(req.recado or '').strip() or None,
+                capitais_escolhidos=escolhidos, modo_dev=dev,
+                itens=[g for g in gravar if g["carregado"].tarifa_versao_id], recado=(req.recado or '').strip() or None,
             )
 
     kept = [g["cotacao"] for g in gravar]

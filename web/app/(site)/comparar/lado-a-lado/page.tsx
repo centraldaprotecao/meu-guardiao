@@ -132,9 +132,13 @@ export default function LadoALado() {
               <div className="p-4 border-t border-line" />
               {escolhidas.map((o) => (
                 <div role="cell" key={o.produto_versao_id} className="p-4 border-t border-l border-line">
-                  <button type="button" className="btn btn-primary w-full" onClick={() => escolher(o.produto_versao_id)}>
-                    Escolher esta opção <ArrowRight size={16} aria-hidden />
-                  </button>
+                  {o.origem === "API" ? (
+                    <p className="text-[13px] text-muted">Contratação ainda não disponível por aqui.</p>
+                  ) : (
+                    <button type="button" className="btn btn-primary w-full" onClick={() => escolher(o.produto_versao_id)}>
+                      Escolher esta opção <ArrowRight size={16} aria-hidden />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

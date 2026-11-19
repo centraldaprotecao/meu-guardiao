@@ -220,3 +220,80 @@ def test_saude_informa_o_que_o_ambiente_faz(cli, monkeypatch):
     monkeypatch.setenv("NOTIFICACOES_ATIVAS", "1")
     s = cli.get("/v1/saude").json()
     assert s["modo_demonstracao"] is True and s["notificacoes_ativas"] is True
+
+
+# --- cotação ao vivo (seguradora com API), com conector simulado -------------
+
+
+def _azos_simulada(monkeypatch, visto=None):
+    from conectores import CoberturaCotada, RespostaCotacao
+    from motor_dor.comparador import CoberturaOfertada, Reajuste, Temporalidade
+
+    class Azos:
+        nome = "azos"
+
+        def configurado(self):
+            return True
+
+        def cotar(self, perfil, solicitadas):
+            if visto is not None:
+                visto.append((perfil, solicitadas))
+            of = CoberturaOfertada("MORTE_QC", Temporalidade.VITALICIO, Reajuste.PREMIO_NIVELADO)
+            return RespostaCotacao("Azos", "Azos Vida", [CoberturaCotada("MORTE_QC", 500_000, 66.33, of)],
+                                   preco_inclui_iof=True)
+
+    monkeypatch.setattr("conectores.registro.conectores_disponiveis", lambda: [Azos()])
+
+
+def test_opcao_ao_vivo_aparece_com_origem_e_nao_vai_para_o_banco(dev, monkeypatch):
+    visto = []
+    _azos_simulada(monkeypatch, visto)
+    nid = _diagnosticar(dev)["necessidade_id"]
+    r = dev.post("/v1/comparar", json=_req_comparar(
+        nid, peso_kg=80, altura_cm=178, renda_mensal=15000, profissao="Advogada(o)")).json()
+    azos = [o for o in r["opcoes"] if o["produto"]["seguradora"] == "Azos"]
+    assert len(azos) == 1 and azos[0]["origem"] == "API" and azos[0]["produto_versao_id"] == "api-azos"
+    assert azos[0]["premio_mensal"] == 66.33
+    assert any("Preço consultado agora" in a for a in azos[0]["alertas"])
+    assert any("questionário de avaliação de risco" in a for a in azos[0]["alertas"])
+    assert azos[0]["desconto_anual_pct"] == 5 and azos[0]["preco_anual_vista"] == round(66.33 * 12 * 0.95, 2)
+    assert all("preco_anual_vista" not in o for o in r["opcoes"] if o is not azos[0])
+    assert all(o["origem"] == "TABELA" for o in r["opcoes"] if o is not azos[0])
+    perfil, pedido = visto[0]
+    assert (perfil.peso_kg, perfil.altura_cm, perfil.renda_mensal, perfil.profissao) == (80, 178, 15000, "Advogada(o)")
+    assert pedido and all(s.capital > 0 for s in pedido)
+    from api.infra import conexao
+    with conexao() as conn:
+        n = conn.execute("SELECT count(*) FROM cotacao_item WHERE cotacao_id = %s", (r["cotacao_id"],)).fetchone()[0]
+    assert n == len([o for o in r["opcoes"] if o["origem"] == "TABELA"])
+
+
+def test_simulacao_dos_sliders_nao_consulta_a_seguradora(dev, monkeypatch):
+    visto = []
+    _azos_simulada(monkeypatch, visto)
+    nid = _diagnosticar(dev)["necessidade_id"]
+    dev.post("/v1/comparar", json=_req_comparar(nid, persistir=False))
+    assert visto == []
+
+
+def test_seguradora_com_api_fora_do_ar_nao_derruba_a_comparacao(dev, monkeypatch):
+    from conectores import ErroConector
+
+    class Fora:
+        nome = "azos"
+
+        def configurado(self):
+            return True
+
+        def cotar(self, *a):
+            raise ErroConector("azos: HTTP 503")
+
+    monkeypatch.setattr("conectores.registro.conectores_disponiveis", lambda: [Fora()])
+    nid = _diagnosticar(dev)["necessidade_id"]
+    r = dev.post("/v1/comparar", json=_req_comparar(nid))
+    assert r.status_code == 200 and r.json()["opcoes"]
+
+
+def test_profissoes_vazia_sem_credencial(cli, monkeypatch):
+    monkeypatch.delenv("AZOS_API_KEY", raising=False)
+    assert cli.get("/v1/profissoes").json() == {"profissoes": []}

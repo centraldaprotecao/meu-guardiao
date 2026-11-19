@@ -171,3 +171,80 @@ def test_icatu_http_com_erro_vira_erro_do_conector(monkeypatch):
     c, _ = _icatu(monkeypatch, erro=urllib.error.HTTPError("u", 503, "x", {}, None))
     with pytest.raises(ErroConector, match="503"):
         c.cotar(PERFIL, PEDIDO)
+
+
+# --- Azos: HTTP simulado, sem rede ------------------------------------------
+
+PERFIL_AZOS = PerfilCotacao(idade=38, sexo="M", fumante=False, profissao="Advogada(o)",
+                            peso_kg=80, altura_cm=178, renda_mensal=15_000)
+DISP_AZOS = {"coverages": [
+    {"code": "2010", "available": True, "min_capital": 69000, "max_capital": 2000000, "step": 1000},
+    {"code": "2018", "available": False, "min_capital": None, "max_capital": None, "step": 1000},
+]}
+PRECO_AZOS = {"coverages": [{"code": "2010", "capital": 500000, "monthly_premium": 33.5, "error": None}],
+              "discount": {"percentage": 5}}
+
+
+def _azos(monkeypatch, erro=None):
+    monkeypatch.setenv("AZOS_API_KEY", "k")
+    monkeypatch.setenv("AZOS_PRECO_INCLUI_IOF", "sim")
+    visto = []
+
+    def abrir(req, timeout):
+        visto.append((req.method, req.full_url, req.data and json.loads(req.data)))
+        if erro:
+            raise erro
+        u = req.full_url
+        if u.endswith("/professions"):
+            return _Resp([{"id": "p1", "name": "Advogada(o)"}])
+        return _Resp(DISP_AZOS if u.endswith("available-coverages") else PRECO_AZOS)
+
+    return ConectorAzos(abrir), visto
+
+
+def test_azos_cota_limita_capital_e_avisa_sobre_o_que_nao_garante(monkeypatch):
+    c, visto = _azos(monkeypatch)
+    r = c.cotar(PERFIL_AZOS, [CoberturaSolicitada("MORTE_QC", 2_500_555),
+                              CoberturaSolicitada("CIRURGIA", 40_000)])
+    preco = visto[-1]
+    assert preco[1].endswith("/api/quotation/v1/pricing")
+    assert preco[2]["coverages"] == [{"code": "2010", "coverage_chosen": 2_000_000.0}]
+    assert preco[2]["profession_id"] == "p1" and preco[2]["gender"] == "male"
+    assert preco[2]["height"] == 1.78 and preco[2]["weight"] == 80
+    assert r.coberturas[0].codigo == "MORTE_QC" and r.coberturas[0].premio_mensal == 33.5
+    assert r.preco_inclui_iof is True
+    texto = " ".join(r.avisos)
+    assert "recusada" in texto and "limitada a 2000000" in texto and "desconto de 5%" in texto
+
+
+def test_azos_sem_peso_altura_renda_recusa_sem_chamar_a_api(monkeypatch):
+    c, visto = _azos(monkeypatch)
+    with pytest.raises(ErroConector, match="peso_kg"):
+        c.cotar(PerfilCotacao(idade=38, sexo="M", fumante=False), PEDIDO)
+    assert visto == []
+
+
+def test_azos_sem_resposta_sobre_iof_nao_cota(monkeypatch):
+    c, _ = _azos(monkeypatch)
+    monkeypatch.delenv("AZOS_PRECO_INCLUI_IOF")
+    with pytest.raises(ErroConector, match="IOF"):
+        c.cotar(PERFIL_AZOS, PEDIDO)
+
+
+def test_azos_http_503_vira_erro_de_conector(monkeypatch):
+    c, _ = _azos(monkeypatch, erro=urllib.error.HTTPError("u", 503, "x", None, None))
+    with pytest.raises(ErroConector, match="503"):
+        c.cotar(PERFIL_AZOS, PEDIDO)
+
+
+def test_azos_invalidez_pedida_como_ipta_vai_no_codigo_2013(monkeypatch):
+    c, visto = _azos(monkeypatch)
+    # a API simulada devolve 2013 disponível e 2013 precificada
+    base = DISP_AZOS["coverages"] + [
+        {"code": "2013", "available": True, "min_capital": 71000, "max_capital": 2000000, "step": 1000}]
+    monkeypatch.setitem(DISP_AZOS, "coverages", base)
+    monkeypatch.setitem(PRECO_AZOS, "coverages", [
+        {"code": "2013", "capital": 1_000_000, "monthly_premium": 12.0, "error": None}])
+    r = c.cotar(PERFIL_AZOS, [CoberturaSolicitada("IPTA", 1_000_000)])
+    assert visto[-1][2]["coverages"] == [{"code": "2013", "coverage_chosen": 1_000_000.0}]
+    assert r.coberturas[0].codigo == "IPTA"

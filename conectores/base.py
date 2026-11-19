@@ -35,6 +35,10 @@ class PerfilCotacao:
     sexo: str            # "M" | "F"
     fumante: bool
     profissao: Optional[str] = None  # a Azos pede profissão na cotação
+    # A Azos exige estes três para precificar; sem eles o conector Azos recusa a cotação.
+    peso_kg: Optional[float] = None
+    altura_cm: Optional[float] = None
+    renda_mensal: Optional[float] = None
 
 
 @dataclass(frozen=True)
