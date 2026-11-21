@@ -24,6 +24,33 @@ class ProdutoCarregado:
     condicoes_gerais_versao_id: Optional[str]
     produto: Produto
     exibivel: bool  # PUBLICADO + tarifa da seguradora
+    ao_vivo: bool = False  # preço consultado agora na API da seguradora (sem tabela de tarifa)
+
+
+def garantir_produto_ao_vivo(conn, seguradora: str, nome: str):
+    """(produto_versao_id, tarifa_versao_id) do produto 'de API' da seguradora; cria se faltar.
+
+    É o que permite gravar a opção consultada ao vivo na cotação e, depois, virar solicitação.
+    O produto fica em RASCUNHO, sem coberturas (o comparador de tabela nunca o carrega) e com
+    tarifa de fonte 'API' (nunca chega a PUBLICADO). Ver migração 0013.
+    """
+    seg = conn.execute(
+        "INSERT INTO seguradora (nome) VALUES (%s) ON CONFLICT (nome) DO UPDATE SET nome = EXCLUDED.nome "
+        "RETURNING id", (seguradora,)).fetchone()[0]
+    prod = conn.execute(
+        "INSERT INTO produto (seguradora_id, nome_comercial, ramo_susep) VALUES (%s,%s,'A_DEFINIR') "
+        "ON CONFLICT (seguradora_id, nome_comercial) DO UPDATE SET nome_comercial = EXCLUDED.nome_comercial "
+        "RETURNING id", (seg, nome)).fetchone()[0]
+    pv = conn.execute(
+        "INSERT INTO produto_versao (produto_id, versao, vigencia_inicio) VALUES (%s,'api-1','2026-01-01') "
+        "ON CONFLICT (produto_id, versao) DO UPDATE SET versao = EXCLUDED.versao RETURNING id",
+        (prod,)).fetchone()[0]
+    tv = conn.execute(
+        "INSERT INTO tarifa_versao (produto_versao_id, versao, vigencia_inicio, fonte_tarifa, fonte_arquivo, "
+        "inclui_iof) VALUES (%s,'api-ao-vivo','2026-01-01','API','consulta ao vivo na API da seguradora',true) "
+        "ON CONFLICT (produto_versao_id, versao) DO UPDATE SET versao = EXCLUDED.versao RETURNING id",
+        (pv,)).fetchone()[0]
+    return str(pv), str(tv)
 
 
 def _f(v):

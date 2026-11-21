@@ -31,6 +31,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .aviso_equipe import avisar_equipe
 from .crm import crm_configurado, despachar_whatsapp
 from .envio import despachar_emails, email_configurado
 from .dps import (
@@ -444,7 +445,9 @@ def criar_solicitacao(req: SolicitacaoIn, bg: BackgroundTasks, request: Request)
         if item is None:
             raise HTTPException(404, "opção não encontrada nesta cotação")
 
-        real = item["status"] == "PUBLICADO" and item["fonte_tarifa"] == "SEGURADORA"
+        # Preço consultado ao vivo na seguradora (fonte 'API') é real, mesmo sem produto publicado.
+        real = (item["status"] == "PUBLICADO" and item["fonte_tarifa"] == "SEGURADORA") \
+            or item["fonte_tarifa"] == "API"
         if not real and not permitir_ficticios():
             raise HTTPException(409, "este produto não está disponível para contratação")
 
@@ -494,6 +497,12 @@ def criar_solicitacao(req: SolicitacaoIn, bg: BackgroundTasks, request: Request)
         _notificar(conn, sid, "RECEBIDA", d.nome, item["seguradora"],
                    produto=item["produto"], url_cg=item["url_cg"])
     _agendar_envios(bg)
+    bg.add_task(avisar_equipe, "Nova solicitação de contratação", [
+        f"Cliente: {d.nome}", f"Celular: {d.celular}",
+        f"Produto: {item['seguradora']} — {item['produto']}",
+        *(["Preço consultado ao vivo: envie a proposta à seguradora pelo portal."]
+          if item["fonte_tarifa"] == "API" else []),
+    ], f"solicitacao-{sid}")
     return {"id": str(sid), "status": "RECEBIDA"}
 
 

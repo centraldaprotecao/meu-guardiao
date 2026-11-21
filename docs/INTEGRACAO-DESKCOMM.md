@@ -33,6 +33,22 @@ No servidor do Meu Guardião (variáveis de ambiente, nunca no código):
 Enviar o que está pendente agora (backoffice, cabeçalho `X-Backoffice-Key`):
 `POST /v1/backoffice/notificacoes/enviar-whatsapp`.
 
+## Aviso à equipe (pedido de especialista e nova solicitação)
+
+Quando o cliente pede para falar com o especialista ou solicita uma contratação, a equipe
+recebe um aviso curto (nome, celular, o que pediu e o link do painel; sem CPF nem dado de
+saúde). Usa o mesmo CRM para o WhatsApp e o SMTP para o e-mail, e **não depende** de
+`NOTIFICACOES_ATIVAS` (que governa as mensagens ao cliente).
+
+| Variável | Valor |
+|---|---|
+| `EQUIPE_WHATSAPP` | celulares com DDD, separados por vírgula (exige `DESKCOMM_URL` e `DESKCOMM_TOKEN`) |
+| `EQUIPE_EMAIL` | e-mails, separados por vírgula (exige `SMTP_HOST` e `EMAIL_REMETENTE`) |
+| `SITE_URL` | endereço do site, para o link do painel |
+
+Sem as variáveis, nada é enviado e o pedido continua na fila do backoffice. Falha de envio
+só vai para o log: nunca atrapalha o cliente.
+
 ## Ainda não verificado contra um CRM real
 
 Os testes usam um servidor falso que imita o DeskComm. Faltam ser conferidos num DeskComm

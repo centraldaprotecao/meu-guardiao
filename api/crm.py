@@ -57,8 +57,12 @@ def _post(caminho: str, corpo: dict, extra_headers: Optional[dict] = None) -> di
         raise ErroCrm(f"CRM inacessível em {caminho}: {type(e).__name__}") from None
 
 
-def enviar_whatsapp(celular: str, nome: str, mensagem: str, notificacao_id: int) -> None:
-    """`celular` com DDD, só dígitos (formato do banco). Levanta ErroCrm em qualquer falha."""
+def enviar_whatsapp(celular: str, nome: str, mensagem: str, notificacao_id: int,
+                    idempotencia: Optional[str] = None) -> None:
+    """`celular` com DDD, só dígitos (formato do banco). Levanta ErroCrm em qualquer falha.
+
+    `idempotencia`: texto estável do envio, para mensagens que não saem da tabela `notificacao`
+    (aviso à equipe). Sem ele vale a chave da notificação."""
     corpo = {"phone_number": f"+55{celular}", "name": nome}
     sessao = os.environ.get("DESKCOMM_CHANNEL_SESSION_ID")
     if sessao:
@@ -68,7 +72,8 @@ def enviar_whatsapp(celular: str, nome: str, mensagem: str, notificacao_id: int)
     if not conversa_id:
         raise ErroCrm("CRM não devolveu a conversa")
     _post("/api/v1/messages", {"conversation_id": conversa_id, "type": "text", "body": mensagem},
-          {"Idempotency-Key": chave_idempotencia(notificacao_id)})
+          {"Idempotency-Key": str(uuid.uuid5(_NS, idempotencia)) if idempotencia
+           else chave_idempotencia(notificacao_id)})
 
 
 def despachar_whatsapp(limite: int = 50) -> Tuple[int, int]:

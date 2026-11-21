@@ -111,14 +111,13 @@ export default function Comparar() {
                       O prêmio sobe com a idade. Em 20 anos: R$ {Math.round(o.projecao_premio.ano_20).toLocaleString("pt-BR")}/mês.
                     </p>
                   )}
+                  {o.origem === "API" && (
+                    <p className="mt-4 text-[13px] text-muted">Preço estimado, consultado agora na seguradora. Pode mudar após o questionário de avaliação de risco.</p>
+                  )}
                   <div className="mt-5 grid grid-cols-[1fr_auto] gap-3 items-center">
-                    {o.origem === "API" ? (
-                      <p className="text-[13px] text-muted">Preço estimado, consultado agora na seguradora. Pode mudar após o questionário de avaliação de risco. A contratação desta opção ainda não é feita por aqui.</p>
-                    ) : (
-                      <button type="button" className="btn btn-primary" onClick={() => escolher(o.produto_versao_id)}>
-                        Escolher <ArrowRight size={16} aria-hidden />
-                      </button>
-                    )}
+                    <button type="button" className="btn btn-primary" onClick={() => escolher(o.produto_versao_id)}>
+                      Escolher <ArrowRight size={16} aria-hidden />
+                    </button>
                     <Link href={`/opcao/${o.produto_versao_id}`} className="font-semibold text-action hover:underline px-1">Detalhes</Link>
                   </div>
                   <label className="mt-4 flex items-center gap-2 text-[14px] text-body cursor-pointer w-fit">

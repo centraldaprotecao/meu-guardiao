@@ -389,3 +389,86 @@ def test_falha_do_crm_deixa_o_whatsapp_pendente(dev, monkeypatch):
 def test_sem_crm_configurado_o_envio_de_whatsapp_responde_409(dev, monkeypatch):
     monkeypatch.delenv("DESKCOMM_URL", raising=False)
     assert dev.post("/v1/backoffice/notificacoes/enviar-whatsapp", headers=CHAVE).status_code == 409
+
+
+# --- opção consultada ao vivo (Azos) vira solicitação; aviso à equipe ---------------------
+
+
+def _cotar_azos(c, monkeypatch):
+    from .test_api import _azos_simulada
+    _azos_simulada(monkeypatch)
+    nid = _diagnosticar(c)["necessidade_id"]
+    r = c.post("/v1/comparar", json=_req_comparar(
+        nid, peso_kg=80, altura_cm=178, renda_mensal=15000, profissao="Advogada(o)")).json()
+    azos = next(o for o in r["opcoes"] if o["origem"] == "API")
+    return r["cotacao_id"], azos["produto_versao_id"]
+
+
+def test_contratar_a_opcao_da_azos_cria_solicitacao_real(dev, monkeypatch):
+    cot, pv = _cotar_azos(dev, monkeypatch)
+    r = dev.post("/v1/solicitacoes", json={
+        "cotacao_id": cot, "produto_versao_id": pv, "dados": _dados(),
+        "consentimentos": list(TEXTO_CONSENTIMENTOS)})
+    assert r.status_code == 201, r.text
+    a = dev.get(f"/v1/solicitacoes/{r.json()['id']}").json()
+    assert a["status"] == "RECEBIDA" and a["demonstracao"] is False  # preço real da seguradora
+    assert a["plano"]["premio_mensal"] == 66.33
+    assert "Azos" in a["notificacoes"][0]["mensagem"]
+
+
+def test_aviso_a_equipe_em_solicitacao_e_pedido_de_especialista(dev, monkeypatch):
+    avisos = []
+    monkeypatch.setattr("api.solicitacoes.avisar_equipe", lambda t, ls, ch: avisos.append((t, ls, ch)))
+    monkeypatch.setattr("api.contato.avisar_equipe", lambda t, ls, ch: avisos.append((t, ls, ch)))
+    cot, pv = _cotar_azos(dev, monkeypatch)
+    dev.post("/v1/solicitacoes", json={"cotacao_id": cot, "produto_versao_id": pv, "dados": _dados(),
+                                       "consentimentos": list(TEXTO_CONSENTIMENTOS)})
+    dev.post("/v1/pedidos-especialista", json={
+        "nome": "Ana Silva", "email": "ana@exemplo.com", "celular": "11987654321",
+        "motivos": ["CAPITAL_MAIOR"]})
+    titulos = [t for t, _, _ in avisos]
+    assert titulos == ["Nova solicitação de contratação", "Novo pedido para falar com o especialista"]
+    texto = " ".join(avisos[0][1])
+    assert "Azos" in texto and "portal" in texto
+    assert "529" not in texto and "Ana@" not in texto  # sem CPF nem e-mail no aviso
+    assert "Capital maior" in " ".join(avisos[1][1]) or "capital maior" in " ".join(avisos[1][1]).lower()
+
+
+def test_avisar_equipe_usa_whatsapp_e_email_configurados(monkeypatch):
+    from api import aviso_equipe as ae
+    zaps, mails = [], []
+    monkeypatch.setenv("EQUIPE_WHATSAPP", "5511911112222, 21999998888")
+    monkeypatch.setenv("EQUIPE_EMAIL", "a@x.com,b@x.com")
+    monkeypatch.setenv("SITE_URL", "https://site.exemplo")
+    monkeypatch.setattr(ae, "crm_configurado", lambda: True)
+    monkeypatch.setattr(ae, "email_configurado", lambda: True)
+    monkeypatch.setattr(ae, "enviar_whatsapp", lambda num, nome, txt, i, idempotencia=None: zaps.append((num, txt, idempotencia)))
+    monkeypatch.setattr(ae, "enviar_email", lambda d, assunto, corpo: mails.append((d, assunto, corpo)))
+    ae.avisar_equipe("Título", ["linha"], "k1")
+    assert [z[0] for z in zaps] == ["11911112222", "21999998888"]  # tira o 55 do início
+    assert zaps[0][2] != zaps[1][2] and "https://site.exemplo/backoffice" in zaps[0][1]
+    assert [m[0] for m in mails] == ["a@x.com", "b@x.com"]
+
+
+def test_avisar_equipe_falha_nao_propaga(monkeypatch):
+    from api import aviso_equipe as ae
+    monkeypatch.setenv("EQUIPE_WHATSAPP", "11911112222")
+    monkeypatch.setenv("EQUIPE_EMAIL", "a@x.com")
+    monkeypatch.setattr(ae, "crm_configurado", lambda: True)
+    monkeypatch.setattr(ae, "email_configurado", lambda: True)
+
+    def quebra(*a, **k):
+        raise RuntimeError("fora do ar")
+
+    monkeypatch.setattr(ae, "enviar_whatsapp", quebra)
+    monkeypatch.setattr(ae, "enviar_email", quebra)
+    ae.avisar_equipe("Título", [], "k2")  # não levanta
+
+
+def test_avisar_equipe_sem_configuracao_nao_envia(monkeypatch):
+    from api import aviso_equipe as ae
+    for v in ("EQUIPE_WHATSAPP", "EQUIPE_EMAIL"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setattr(ae, "enviar_whatsapp", lambda *a, **k: pytest.fail("não deveria enviar"))
+    monkeypatch.setattr(ae, "enviar_email", lambda *a, **k: pytest.fail("não deveria enviar"))
+    ae.avisar_equipe("Título", [], "k3")

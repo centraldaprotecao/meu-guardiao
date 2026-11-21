@@ -245,14 +245,15 @@ def _azos_simulada(monkeypatch, visto=None):
     monkeypatch.setattr("conectores.registro.conectores_disponiveis", lambda: [Azos()])
 
 
-def test_opcao_ao_vivo_aparece_com_origem_e_nao_vai_para_o_banco(dev, monkeypatch):
+def test_opcao_ao_vivo_aparece_com_origem_e_e_gravada_na_cotacao(dev, monkeypatch):
     visto = []
     _azos_simulada(monkeypatch, visto)
     nid = _diagnosticar(dev)["necessidade_id"]
     r = dev.post("/v1/comparar", json=_req_comparar(
         nid, peso_kg=80, altura_cm=178, renda_mensal=15000, profissao="Advogada(o)")).json()
     azos = [o for o in r["opcoes"] if o["produto"]["seguradora"] == "Azos"]
-    assert len(azos) == 1 and azos[0]["origem"] == "API" and azos[0]["produto_versao_id"] == "api-azos"
+    assert len(azos) == 1 and azos[0]["origem"] == "API"
+    assert str(uuid.UUID(azos[0]["produto_versao_id"])) == azos[0]["produto_versao_id"]
     assert azos[0]["premio_mensal"] == 66.33
     assert any("Preço consultado agora" in a for a in azos[0]["alertas"])
     assert any("questionário de avaliação de risco" in a for a in azos[0]["alertas"])
@@ -265,7 +266,14 @@ def test_opcao_ao_vivo_aparece_com_origem_e_nao_vai_para_o_banco(dev, monkeypatc
     from api.infra import conexao
     with conexao() as conn:
         n = conn.execute("SELECT count(*) FROM cotacao_item WHERE cotacao_id = %s", (r["cotacao_id"],)).fetchone()[0]
-    assert n == len([o for o in r["opcoes"] if o["origem"] == "TABELA"])
+    assert n == len(r["opcoes"])  # a opção ao vivo também é gravada: é o que permite contratá-la
+    with conexao() as conn:
+        # o produto "de API" nunca é carregado pelo comparador de tabela (sem coberturas)
+        assert conn.execute(
+            "SELECT count(*) FROM produto_cobertura WHERE produto_versao_id = %s",
+            (azos[0]["produto_versao_id"],)).fetchone()[0] == 0
+    r2 = dev.post("/v1/comparar", json=_req_comparar(nid, persistir=False)).json()
+    assert all(o["origem"] == "TABELA" for o in r2["opcoes"])
 
 
 def test_simulacao_dos_sliders_nao_consulta_a_seguradora(dev, monkeypatch):

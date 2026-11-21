@@ -240,7 +240,7 @@ def profissoes():
     return {"profissoes": azos.listar_profissoes() if azos.configurado() else []}
 
 
-def _produtos_de_api(req: "CompararIn", mapa: MapaDeProtecao, escolhidos) -> List[repo.ProdutoCarregado]:
+def _produtos_de_api(conn, req: "CompararIn", mapa: MapaDeProtecao, escolhidos) -> List[repo.ProdutoCarregado]:
     """Cotação ao vivo nas seguradoras com API. Qualquer falha vira log, nunca erro ao cliente."""
     solicitadas = []
     for n in mapa.necessidades:
@@ -254,12 +254,13 @@ def _produtos_de_api(req: "CompararIn", mapa: MapaDeProtecao, escolhidos) -> Lis
     r = cotar_em_conectores(perfil, solicitadas)
     for a in r.avisos:
         log.warning("conector: %s", a)
-    return [
-        repo.ProdutoCarregado(
-            produto_versao_id="api-" + p.seguradora.lower(), tarifa_versao_id=None,
-            condicoes_gerais_versao_id=None, produto=p, exibivel=True)
-        for p in r.produtos
-    ]
+    out = []
+    for p in r.produtos:
+        pv, tv = repo.garantir_produto_ao_vivo(conn, p.seguradora, p.nome)
+        out.append(repo.ProdutoCarregado(
+            produto_versao_id=pv, tarifa_versao_id=tv, condicoes_gerais_versao_id=None,
+            produto=p, exibivel=True, ao_vivo=True))
+    return out
 
 
 @app.post("/v1/comparar")
@@ -304,7 +305,7 @@ def comparar_endpoint(req: CompararIn):
         # Preço ao vivo só na comparação final: o simulador dos sliders chama esta rota a cada
         # ajuste e não deve consumir a cota das seguradoras.
         if req.persistir:
-            carregados = carregados + _produtos_de_api(req, mapa, escolhidos)
+            carregados = carregados + _produtos_de_api(conn, req, mapa, escolhidos)
         por_produto = {id(c.produto): c for c in carregados}
         cotacoes = comparar(
             [c.produto for c in carregados], mapa, req.idade, req.sexo, req.fumante,
@@ -330,7 +331,7 @@ def comparar_endpoint(req: CompararIn):
                     })
                     continue
                 projecao = {a: round(v, 2) for a, v in projecao.items()}
-            ao_vivo = pc.tarifa_versao_id is None
+            ao_vivo = pc.ao_vivo
             opcao = {
                 "origem": "API" if ao_vivo else "TABELA",
                 "produto_versao_id": pc.produto_versao_id,
@@ -374,7 +375,7 @@ def comparar_endpoint(req: CompararIn):
                 motor_versao=motor_versao, comparador_versao=PARAMETROS_COMPARADOR.versao,
                 idade=req.idade, sexo=req.sexo, fumante=req.fumante,
                 capitais_escolhidos=escolhidos, modo_dev=dev,
-                itens=[g for g in gravar if g["carregado"].tarifa_versao_id], recado=(req.recado or '').strip() or None,
+                itens=gravar, recado=(req.recado or '').strip() or None,
             )
 
     kept = [g["cotacao"] for g in gravar]
