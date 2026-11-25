@@ -56,4 +56,4 @@ def avisar_equipe(titulo: str, linhas: List[str], chave: str) -> None:
             try:
                 enviar_email(dest, titulo, texto)
             except Exception as e:  # noqa: BLE001
-                log.error("aviso à equipe por e-mail falhou: %s", type(e).__name__)
+                log.error("aviso à equipe por e-mail falhou: %s: %s", type(e).__name__, e)

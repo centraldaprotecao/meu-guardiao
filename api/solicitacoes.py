@@ -497,7 +497,8 @@ def criar_solicitacao(req: SolicitacaoIn, bg: BackgroundTasks, request: Request)
         _notificar(conn, sid, "RECEBIDA", d.nome, item["seguradora"],
                    produto=item["produto"], url_cg=item["url_cg"])
     _agendar_envios(bg)
-    bg.add_task(avisar_equipe, "Nova solicitação de contratação", [
+    # Direto, não em segundo plano: na Vercel a função congela ao responder e o aviso se perde.
+    avisar_equipe("Nova solicitação de contratação", [
         f"Cliente: {d.nome}", f"Celular: {d.celular}",
         f"Produto: {item['seguradora']} — {item['produto']}",
         *(["Preço consultado ao vivo: envie a proposta à seguradora pelo portal."]

@@ -21,7 +21,7 @@ import re
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from psycopg.rows import dict_row
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -164,7 +164,7 @@ def registrar_evento(req: EventoIn):
 
 
 @router.post("/v1/pedidos-especialista", status_code=201)
-def pedir_especialista(req: PedidoEspecialistaIn, bg: BackgroundTasks):
+def pedir_especialista(req: PedidoEspecialistaIn):
     invalidos = [m for m in req.motivos if m not in MOTIVOS]
     if invalidos:
         raise HTTPException(422, f"motivos desconhecidos: {invalidos}")
@@ -182,7 +182,8 @@ def pedir_especialista(req: PedidoEspecialistaIn, bg: BackgroundTasks):
             "motivos, mensagem) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             (lead, nid, cot, req.nome, req.email, req.celular, req.motivos,
              (req.mensagem or "").strip() or None)).fetchone()[0]
-    bg.add_task(avisar_equipe, "Novo pedido para falar com o especialista", [
+    # Direto, não em segundo plano: na Vercel a função congela ao responder e o aviso se perde.
+    avisar_equipe("Novo pedido para falar com o especialista", [
         f"Nome: {req.nome}", f"Celular: {req.celular}",
         *([f"Motivos: {', '.join(MOTIVOS[m] for m in req.motivos)}"] if req.motivos else []),
     ], f"especialista-{pid}")
