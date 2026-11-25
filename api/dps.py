@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .proposta import AZOS, ICATU
 
-VERSAO = "2026-10-v1"
+VERSAO = "2026-11-v1"
 SIM_NAO, UNICA, MULTIPLA, NUMERO = "sim_nao", "unica", "multipla", "numero"
 
 
@@ -81,18 +81,28 @@ _ENUNCIADO_COND = ("Independentemente da data, você já foi diagnosticado(a), t
                    "submetido(a) a alguma cirurgia para: (Selecione todas as opções que se apliquem).")
 
 _AZOS = [
-    _p("A1", _ENUNCIADO_COND, MULTIPLA, exclusiva="Nenhum desses", opcoes=[
-        "Abuso de álcool", "Hipertensão ou Pressão alta", "Pré-diabetes ou Diabetes (exceto gestacional)",
+    _p("A0", "Independente da data, você foi diagnosticado(a) ou tratado(a) clinicamente para alguma doença "
+             "cardiovascular? (Selecione todas as opções que se apliquem).", MULTIPLA, exclusiva="Nenhum desses.",
+       opcoes=[
+           "Aneurisma da aorta.", "Angina.", "Arritmia cardíaca (fibrilação, flutter, taquicardia, etc).",
+           "Aterosclerose.", "Doença arterial periférica.", "Doença cardíaca reumática.",
+           "Doença das válvulas (sopro, prolapso, regurgitação, etc).", "Embolia e/ou tromboembolia pulmonar.",
+           "Endocardite.", "Infarto agudo do miocárdio.", "Insuficiência cardíaca.", "Miocardite.",
+           "Trombose venosa ou arterial.", "Outra doença cardiovascular.", "Nenhum desses."],
+       fonte="tela do portal (25/11/2026)"),
+    _p("A1", _ENUNCIADO_COND, MULTIPLA, exclusiva="Nenhum desses.", opcoes=[
+        "HIV ou AIDS.", "Câncer.", "Depressão, ansiedade, burnout ou outro transtorno mental.",
+        "Abuso de álcool.", "Hipertensão ou Pressão alta.", "Pré-diabetes ou Diabetes (exceto gestacional).",
         "Derrame (AVC, TIA, \"Mini-stroke\", etc.)",
-        "Distúrbio convulsivo devido a epilepsia, lesão cerebral ou outros motivos",
-        "Transplante de órgãos (doador ou receptor)", "Condições renais, incluindo pedra nos rins", "Lúpus",
-        "Condições da tireoide (hipertireoidismo, nódulos, cistos, dentre outros)",
-        "Perda de peso (cirurgia bariátrica)", "Hérnia de disco, protrusão, extrusão ou abaulamento",
+        "Distúrbio convulsivo devido a epilepsia, lesão cerebral ou outros motivos.",
+        "Transplante de órgãos (doador ou receptor)", "Condições renais, incluindo pedra nos rins.", "Lúpus.",
+        "Condições da tireoide (hiper/hipotireoidismo, nódulos, cistos, dentre outros).",
+        "Perda de peso (cirurgia bariátrica).", "Hérnia de disco, protrusão, extrusão ou abaulamento.",
         "Doenças pulmonares (asma, bronquite, pneumonia, doença pulmonar obstrutiva crônica, enfisema, "
         "dentre outras)",
         "Condições do aparelho digestivo (diverticulose, diverticulite, esofagite, gastrite, hérnia de "
-        "hiato, refluxo ou úlcera)", "Nenhum desses"],
-       confirmada=False, fonte="anexo (enunciado deduzido do bloco 2)"),
+        "hiato, refluxo ou úlcera).", "Nenhum desses."],
+       fonte="tela do portal (25/11/2026)"),
     _p("A2", _ENUNCIADO_COND, MULTIPLA, exclusiva="Nenhuma dessas.", opcoes=[
         "Amputações ou encurtamento de membros.", "Perda ou deficiência auditiva, na fala ou visual.",
         "Doenças ortopédicas (artrite psoriática/reumatoide, osteoartrose, espondilite anquilosante, "

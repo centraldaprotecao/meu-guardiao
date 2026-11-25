@@ -25,7 +25,7 @@ def icatu_ok(bebe=False):
 
 def test_so_azos_e_icatu_tem_questionario():
     assert questionario_de(COMUM) is None
-    assert len(questionario_de(AZOS)["perguntas"]) == 13
+    assert len(questionario_de(AZOS)["perguntas"]) == 14
     # 12 perguntas principais (a 1, peso e altura, vem do cadastro da proposta) + 4 sub-perguntas da 9
     ids = [p["id"] for p in questionario_de(ICATU)["perguntas"]]
     assert len([i for i in ids if "." not in i]) == 12 and len(ids) == 16
@@ -80,19 +80,20 @@ def test_instantaneo_guarda_o_texto_exato_e_o_hash_muda_com_qualquer_resposta():
     q, r = azos_ok()
     norm = validar_respostas(q, r)[1]
     s = instantaneo(q, norm)
-    assert s["itens"][0]["pergunta"] == q["perguntas"][0]["texto"] and len(s["itens"]) == 13
+    assert s["itens"][0]["pergunta"] == q["perguntas"][0]["texto"] and len(s["itens"]) == 14
     h1 = hash_dps(s)
     assert h1 == hash_dps(instantaneo(q, norm)) and len(h1) == 64
     assert hash_dps(instantaneo(q, {**norm, "A6": True})) != h1
 
 
 def test_nenhum_questionario_com_pergunta_nao_confirmada_vale_para_producao():
-    # Verdade hoje: a Azos tem o enunciado do bloco 1 deduzido; a Icatu tem 5 perguntas por confirmar.
-    assert not questionario_valido_para_producao(questionario_de(AZOS))
+    # Verdade hoje: a Azos tem todas as perguntas marcadas como confirmadas (A0 e A1 conferidas na tela do
+    # portal em 25/11/2026); a Icatu tem 5 perguntas por confirmar.
+    assert questionario_valido_para_producao(questionario_de(AZOS))
     assert not questionario_valido_para_producao(questionario_de(ICATU))
     assert {p["id"] for p in questionario_de(ICATU)["perguntas"] if not p["confirmada"]} == \
         {"I4", "I7", "I9", "I9.1", "I13"}
-    assert [p["id"] for p in questionario_de(AZOS)["perguntas"] if not p["confirmada"]] == ["A1"]
+    assert [p["id"] for p in questionario_de(AZOS)["perguntas"] if not p["confirmada"]] == []
 
 
 # --- regras de entrada na criação da solicitação (sem banco) -----------------------------------
@@ -125,13 +126,20 @@ def test_seguradora_sem_dps_nao_exige_nada(monkeypatch):
 
 def test_produto_real_com_questionario_nao_confirmado_e_barrado(monkeypatch):
     monkeypatch.delenv("DPS_ACEITAR_NAO_CONFIRMADA", raising=False)
-    q, r = azos_ok()
+    q, r = icatu_ok()
     with pytest.raises(HTTPException) as e:
-        _preparar_dps(SolicitacaoIn(**_BASE, dps=r), "Azos", True)
+        _preparar_dps(SolicitacaoIn(**_BASE, dps=r), "Icatu", True)
     assert e.value.status_code == 409 and "conferência" in e.value.detail
     monkeypatch.setenv("DPS_ACEITAR_NAO_CONFIRMADA", "1")  # liberação consciente, a equipe decide
+    snap, h, confirmada = _preparar_dps(SolicitacaoIn(**_BASE, dps=r), "Icatu", True)
+    assert confirmada is False and len(h) == 64
+
+
+def test_azos_com_questionario_confirmado_passa_em_produto_real(monkeypatch):
+    monkeypatch.delenv("DPS_ACEITAR_NAO_CONFIRMADA", raising=False)
+    q, r = azos_ok()
     snap, h, confirmada = _preparar_dps(SolicitacaoIn(**_BASE, dps=r), "Azos", True)
-    assert confirmada is False and len(h) == 64 and len(snap["itens"]) == 13
+    assert confirmada is True and len(h) == 64 and len(snap["itens"]) == 14
 
 
 def test_demonstracao_pode_usar_o_questionario_de_uma_seguradora_real(monkeypatch):
