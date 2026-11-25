@@ -252,6 +252,17 @@ def ficha_pedido(pid: str):
     }
 
 
+@router.delete("/v1/backoffice/pedidos-especialista/{pid}", dependencies=[Depends(exigir_backoffice)])
+def apagar_pedido(pid: str):
+    """Apaga o pedido de vez (sem volta). Para limpar testes; não mexe no lead nem nos consentimentos."""
+    _uuid_ou_none(pid, "id")
+    with conexao() as conn:
+        r = conn.execute("DELETE FROM pedido_especialista WHERE id=%s RETURNING id", (pid,)).fetchone()
+    if r is None:
+        raise HTTPException(404, "pedido não encontrado")
+    return {"id": pid, "apagado": True}
+
+
 class StatusPedidoIn(_Estrito):
     status: str
 

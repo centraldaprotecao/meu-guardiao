@@ -160,6 +160,17 @@ function Gaveta({ id, H, onFechar, onMudou }: { id: string; H: Record<string, st
     }
   }
 
+  async function apagar() {
+    if (!window.confirm("Apagar este pedido de vez? Não tem como desfazer.")) return;
+    try {
+      await api(`/v1/backoffice/pedidos-especialista/${id}`, { headers: H, method: "DELETE" });
+      onMudou();
+      onFechar();
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
   const digitos = f?.contato.celular ?? "";
   const tel = digitos.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3");
 
@@ -181,6 +192,7 @@ function Gaveta({ id, H, onFechar, onMudou }: { id: string; H: Record<string, st
               {f.status === "NOVO" && <button className="btn btn-primary !py-2.5" onClick={() => status("EM_CONTATO")}>Marcar em contato</button>}
               {f.status !== "CONCLUIDO" && <button className="btn btn-secondary !py-2.5" onClick={() => status("CONCLUIDO")}>Concluir</button>}
               <a className="btn btn-secondary !py-2.5" target="_blank" rel="noreferrer" href={`https://wa.me/55${digitos}`}>Abrir WhatsApp</a>
+              <button className="btn btn-secondary !py-2.5 !text-danger" onClick={apagar}>Apagar</button>
             </div>
 
             <section>
