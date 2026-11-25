@@ -106,7 +106,7 @@ _AZOS = [
     _p("A2", _ENUNCIADO_COND, MULTIPLA, exclusiva="Nenhuma dessas.", opcoes=[
         "Amputações ou encurtamento de membros.", "Perda ou deficiência auditiva, na fala ou visual.",
         "Doenças ortopédicas (artrite psoriática/reumatoide, osteoartrose, espondilite anquilosante, "
-        "osteoporose).", "Lesões ortopédicas (Fraturas, Lesões ligamentares e de tendões, dentre outras).",
+        "osteoporose)", "Lesões ortopédicas (Fraturas, Lesões ligamentares e de tendões, dentre outras).",
         "Esforço repetitivo (LER/DORT).", "Luxações (somente em casos com menos de 12 meses).",
         "Entorses ou torções (somente em casos com menos de 1 mês).", "Paralisia cerebral.",
         "Tetraplegia ou quadriplegia irreversíveis.",
@@ -115,50 +115,52 @@ _AZOS = [
     _p("A3", "Nos últimos 5 anos, você realizou biópsia investigativa ou recebeu o diagnóstico de: "
              "nódulos, cistos ou tumores? (Exceto: Nódulos/cistos na tireoide, endometriose, nevos, "
              "psoríase, distúrbios de pele, pólipos e biópsias realizadas em colonoscopia.)", UNICA,
-       opcoes=["Sim, mas o resultado ainda não saiu",
+       opcoes=["Sim, mas o resultado ainda não saiu.",
                "Sim, com resultado inconclusivo (mais exames serão necessários para concluir a "
-               "investigação médica)", "Sim, foi diagnosticada uma condição maligna",
-               "Sim, foi diagnosticada condição benigna", "Não"], fonte="anexo"),
+               "investigação médica).", "Sim, foi diagnosticada uma condição maligna.",
+               "Sim, foi diagnosticada condição benigna.", "Não."], fonte="tela do portal (25/11/2026)"),
     _p("A4", "Nos últimos 5 anos, realizou alguma cirurgia ou ficou internado(a)? (desconsidere cesárea, "
              "cirurgias plásticas e casos já mencionados anteriormente).", UNICA,
-       opcoes=["Sim, cirurgia (com internação ou sem internação)", "Sim, apenas internação", "Não"],
-       fonte="anexo"),
+       opcoes=["Sim, cirurgia (com internação ou sem internação)", "Sim, apenas internação.", "Não."],
+       fonte="tela do portal (25/11/2026)"),
     _p("A5", "Está ciente de alguma condição médica que não foi mencionada e possa resultar em uma "
              "internação ou cirurgia?", UNICA,
-       opcoes=["Sim, irei iniciar tratamento para uma condição descoberta recentemente",
-               "Sim, estou em fase de investigação ou irei iniciar uma investigação médica", "Não"],
-       fonte="anexo"),
+       opcoes=["Sim, irei iniciar tratamento para uma condição descoberta recentemente.",
+               "Sim, estou em fase de investigação ou irei iniciar uma investigação médica.", "Não."],
+       fonte="tela do portal (25/11/2026)"),
     _p("A6", "Viajou nos últimos 2 anos ou tem a intenção de viajar em aeronaves pequenas (táxis aéreos, "
-             "aeronaves particulares, helicópteros, ultraleves, etc)?", fonte="anexo"),
+             "aeronaves particulares, helicópteros, ultraleves, etc)?", fonte="tela do portal (25/11/2026)"),
     _p("A7", "Nos últimos 2 anos ou no próximo ano, você fez ou planeja fazer / praticar:", MULTIPLA,
-       exclusiva="Nenhuma dessas atividades", opcoes=[
-           "Corridas de automóveis, kart, caminhões e similares",
+       exclusiva="Nenhuma dessas atividades.", opcoes=[
+           # "automoveis" sem acento é a grafia do portal; a transcrição vira cópia, então fica igual.
+           "Corridas de automoveis, kart, caminhões e similares",
            "Motocross, trilhas, rally, enduro ou corridas de motocicleta (qualquer tipo)",
-           "Escaladas ao ar livre que requer equipamento especializado", "Esportes de neve (Ski, Snowboard)",
+           "Escaladas ao ar livre que requer equipamento especializado.", "Esportes de neve (Ski, Snowboard)",
            "Lutas ou artes marciais: Jiu-Jitsu, Judo, Luta Livre, MMA, Muay Thai, Karate e Boxe "
-           "(desconsiderar treinos fitness)", "Mergulhar em profundidade superior a 30 metros",
-           "Mountain bike, BMX, ciclismo de aventura ou downhill",
-           "Paraquedas, bungee jump, asa delta ou similar", "Skate, longboard ou patins",
-           "Nenhuma dessas atividades"], fonte="anexo"),
+           "(desconsiderar treinos fitness)", "Mergulhar em profundidade superior a 30 metros.",
+           "Mountain bike, BMX, ciclismo de aventura ou downhill.",
+           "Paraquedas, bungee jump, asa delta ou similar.", "Skate, longboard ou patins",
+           "Nenhuma dessas atividades."], fonte="tela do portal (25/11/2026)"),
     _p("A8", "Você utiliza ou pretende utilizar motocicleta como piloto ou passageiro?", UNICA,
        opcoes=["Lazer (Apenas passeios ou viagens)", "Locomoção ao trabalho (somente ida e/ou volta) + Lazer",
                "Uso comercial / prestação de serviço / entregas + Lazer",
                "Não utilizo motocicleta de nenhuma forma"]),
     _p("A9", "Você mora atualmente ou tem planos de morar fora do Brasil (em outro país, por mais de 60 "
-             "dias), nos próximos 12 meses?", fonte="anexo"),
+             "dias), nos próximos 12 meses?", fonte="tela do portal (25/11/2026)"),
     _p("A10", "Você já possui algum seguro de vida individual para as coberturas que está realizando a "
               "cotação na Azos?", UNICA,
-       opcoes=["Sim, planejo manter outros seguros além do seguro com a Azos",
-               "Sim, mas vou cancelar todos os outros seguros e manter apenas com a Azos", "Não"],
-       fonte="anexo"),
+       opcoes=["Sim, planejo manter outros seguros além do seguro com a Azos.",
+               "Sim, mas vou cancelar todos os outros seguros e manter apenas com a Azos.", "Não."],
+       fonte="tela do portal (25/11/2026)"),
     _p("A11", "Independentemente da data, você tem conhecimento de alguma doença, condição de saúde, "
               "lesão ou fratura ainda não informada nas respostas anteriores?"),
     _p("A12", "Você está ou esteve em investigação médica nos últimos 12 meses, ou pretende iniciar uma "
-              "para avaliar uma condição ainda não conclusiva? (exceto check-up)", fonte="anexo"),
+              "para avaliar uma condição ainda não conclusiva? (exceto check-up)", fonte="tela do portal (25/11/2026)"),
     _p("A13", "Você usa regularmente ou recebeu orientação médica para usar algum medicamento devido a "
               "condições não declaradas anteriormente? (exceto anticoncepcionais, suplementos e "
               "vitaminas).", UNICA,
-       opcoes=["Sim, por conta própria", "Sim, por recomendação médica", "Não"], fonte="anexo"),
+       opcoes=["Sim, por conta própria.", "Sim, por recomendação médica.", "Não."],
+       fonte="tela do portal (25/11/2026)"),
 ]
 
 _BANCO = {AZOS: _AZOS, ICATU: _ICATU}
